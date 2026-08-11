@@ -1,0 +1,383 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Priority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+  CANCELLED
+}
+
+enum GoalStatus {
+  ACTIVE
+  COMPLETED
+  PAUSED
+  CANCELLED
+}
+
+enum RecurrenceType {
+  NONE
+  DAILY
+  WEEKDAYS
+  WEEKLY
+  CUSTOM
+}
+
+enum NotificationType {
+  MORNING_BRIEFING
+  TASK_REMINDER
+  OVERDUE_REMINDER
+  UPCOMING_TASK
+  END_OF_DAY_REVIEW
+  WEEKLY_REVIEW
+  HABIT_REMINDER
+}
+
+enum NotificationChannel {
+  IN_APP
+  BROWSER
+  EMAIL
+  PUSH
+}
+
+enum Theme {
+  LIGHT
+  DARK
+  SYSTEM
+}
+
+// ─── User & Settings ─────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  timezone  String   @default("America/New_York")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  settings      UserSettings?
+  goals         Goal[]
+  projects      Project[]
+  tasks         Task[]
+  taskInstances TaskInstance[]
+  habits        Habit[]
+  habitCompletions HabitCompletion[]
+  reminders     Reminder[]
+  notifications Notification[]
+  dailyReviews  DailyReview[]
+  weeklyReviews WeeklyReview[]
+  productivityStreak ProductivityStreak?
+}
+
+model UserSettings {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Working hours
+  workStartHour   Int @default(9)
+  workEndHour     Int @default(17)
+  availableHours  Int @default(8)
+
+  // Daily planning
+  morningBriefingHour   Int @default(9)
+  morningBriefingMinute Int @default(0)
+  endOfDayReviewHour    Int @default(20)
+  endOfDayReviewMinute  Int @default(0)
+  weeklyReviewDay       Int @default(0) // 0=Sunday
+  weeklyReviewHour      Int @default(19)
+  weeklyReviewMinute    Int @default(0)
+
+  // Notifications
+  notificationsEnabled Boolean @default(true)
+  morningBriefingEnabled Boolean @default(true)
+  endOfDayReviewEnabled  Boolean @default(true)
+  weeklyReviewEnabled    Boolean @default(true)
+  taskRemindersEnabled   Boolean @default(true)
+  overdueRemindersEnabled Boolean @default(true)
+
+  // Appearance
+  theme Theme @default(SYSTEM)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Goals & Projects ────────────────────────────────────────────────────────
+
+model Goal {
+  id          String     @id @default(cuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  startDate   DateTime?
+  targetDate  DateTime?
+  progress    Int        @default(0) // 0-100
+  priority    Priority   @default(MEDIUM)
+  status      GoalStatus @default(ACTIVE)
+  sortOrder   Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  projects Project[]
+  tasks    Task[]
+
+  @@index([userId, status])
+}
+
+model Project {
+  id          String     @id @default(cuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goalId      String?
+  goal        Goal?      @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  name        String
+  description String?
+  progress    Int        @default(0)
+  priority    Priority   @default(MEDIUM)
+  status      GoalStatus @default(ACTIVE)
+  sortOrder   Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  tasks Task[]
+
+  @@index([userId, goalId])
+}
+
+// ─── Tasks ───────────────────────────────────────────────────────────────────
+
+model Task {
+  id          String     @id @default(cuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goalId      String?
+  goal        Goal?      @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  projectId   String?
+  project     Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  parentId    String?
+  parent      Task?      @relation("Subtasks", fields: [parentId], references: [id], onDelete: Cascade)
+  subtasks    Task[]     @relation("Subtasks")
+
+  title       String
+  description String?
+  dueDate     DateTime?
+  dueTime     String?    // HH:mm format
+  priority    Priority   @default(MEDIUM)
+  status      TaskStatus @default(PENDING)
+  estimatedMinutes Int?
+  category    String?
+  notes       String?
+  isTopPriority Boolean  @default(false)
+
+  // Recurrence
+  recurrenceType RecurrenceType @default(NONE)
+  recurrenceRule String?         // RRULE string for custom patterns
+  recurrenceDays String?         // JSON array of day numbers [0-6]
+
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  instances TaskInstance[]
+  reminders Reminder[]
+
+  @@index([userId, status])
+  @@index([userId, dueDate])
+  @@index([userId, priority])
+  @@index([projectId])
+  @@index([goalId])
+  @@index([parentId])
+}
+
+model TaskInstance {
+  id       String     @id @default(cuid())
+  userId   String
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId   String
+  task     Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  scheduledDate DateTime
+  dueTime       String?
+  status        TaskStatus @default(PENDING)
+  completedAt   DateTime?
+  skippedAt     DateTime?
+  notes         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([taskId, scheduledDate])
+  @@index([userId, scheduledDate])
+  @@index([userId, status])
+}
+
+// ─── Habits ──────────────────────────────────────────────────────────────────
+
+model Habit {
+  id          String  @id @default(cuid())
+  userId      String
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  icon        String?
+  color       String?
+
+  // Frequency: daily or weekly target count
+  frequencyType  String @default("daily") // daily | weekly
+  targetCount    Int    @default(1)
+  daysOfWeek     String? // JSON [0-6] for specific days
+
+  reminderTime String? // HH:mm
+  isActive     Boolean @default(true)
+  sortOrder    Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  completions HabitCompletion[]
+
+  @@index([userId, isActive])
+}
+
+model HabitCompletion {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  habitId  String
+  habit    Habit    @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  date     DateTime
+  count    Int      @default(1)
+  notes    String?
+  createdAt DateTime @default(now())
+
+  @@unique([habitId, date])
+  @@index([userId, date])
+}
+
+// ─── Reminders & Notifications ───────────────────────────────────────────────
+
+model Reminder {
+  id       String @id @default(cuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId   String?
+  task     Task?  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  type        NotificationType
+  scheduledAt DateTime
+  message     String?
+  isSent      Boolean  @default(false)
+  sentAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, scheduledAt, isSent])
+}
+
+model Notification {
+  id       String @id @default(cuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type      NotificationType
+  channel   NotificationChannel @default(IN_APP)
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  readAt    DateTime?
+  metadata  String?  // JSON for extra data
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+}
+
+// ─── Reviews ─────────────────────────────────────────────────────────────────
+
+model DailyReview {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date     DateTime
+
+  tasksCompleted   Int @default(0)
+  tasksIncomplete  Int @default(0)
+  tasksMoved       Int @default(0)
+  tasksSkipped     Int @default(0)
+  tasksDeleted     Int @default(0)
+  notes            String?
+  mood             Int? // 1-5
+  isComplete       Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date])
+}
+
+model WeeklyReview {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weekStart DateTime
+  weekEnd   DateTime
+
+  tasksCompleted  Int @default(0)
+  tasksTotal      Int @default(0)
+  completionRate  Int @default(0)
+  streakDays      Int @default(0)
+  notes           String?
+  nextWeekPlan    String? // JSON array of priorities
+  isComplete      Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, weekStart])
+}
+
+// ─── Productivity Streak ─────────────────────────────────────────────────────
+
+model ProductivityStreak {
+  id              String @id @default(cuid())
+  userId          String @unique
+  user            User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentStreak   Int    @default(0)
+  longestStreak   Int    @default(0)
+  lastActiveDate  DateTime?
+  tasksThisWeek   Int    @default(0)
+  updatedAt       DateTime @updatedAt
+}
+
+// ─── Natural Language Parse Cache (for future AI) ────────────────────────────
+
+model ParsedTaskDraft {
+  id        String   @id @default(cuid())
+  userId    String
+  rawInput  String
+  parsed    String   // JSON of ParsedTaskResult
+  isApplied Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}

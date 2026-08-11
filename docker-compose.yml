@@ -1,0 +1,16 @@
+# Local PostgreSQL for development (optional — use if not deploying DB elsewhere)
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: focus
+      POSTGRES_PASSWORD: focus
+      POSTGRES_DB: focus
+    ports:
+      - "5432:5432"
+    volumes:
+      - focus_data:/var/lib/postgresql/data
+
+volumes:
+  focus_data:
