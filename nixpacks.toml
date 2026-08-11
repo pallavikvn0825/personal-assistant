@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ["openssl", "nodejs_22"]
+
+[phases.install]
+cmds = ["npm ci"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "npx prisma db push && npm start"
