@@ -2,11 +2,17 @@
 
 A personalized daily and weekly accountability assistant that helps you plan your day, track goals, maintain habits, and stay on track.
 
+> Monitor day-to-day and week-to-week tasks with intelligent planning and reviews.
+
+## Deploy to Mobile
+
+See **[DEPLOY.md](./DEPLOY.md)** for step-by-step GitHub + Railway deployment instructions.
+
 ## Architecture
 
 ```
 Next.js 15 (App Router) + TypeScript
-├── Prisma ORM + SQLite (dev) / PostgreSQL (prod)
+├── Prisma ORM + PostgreSQL
 ├── Tailwind CSS 4
 ├── Server Components + Server Actions
 └── Service Layer (business logic separated from UI)
@@ -36,12 +42,19 @@ UserSettings, Reminder, Notification, DailyReview, WeeklyReview
 
 - Node.js 18+
 - npm
+- Docker (optional, for local PostgreSQL)
 
 ### Setup
 
 ```bash
 # Install dependencies
 npm install
+
+# Start local PostgreSQL (optional)
+docker compose up -d
+
+# Copy env and set DATABASE_URL
+cp .env.example .env
 
 # Set up database and seed demo data
 npm run db:setup
@@ -57,7 +70,7 @@ Open [http://localhost:3000](http://localhost:3000)
 Copy `.env.example` to `.env`:
 
 ```
-DATABASE_URL="file:./dev.db"
+DATABASE_URL="postgresql://focus:focus@localhost:5432/focus"
 DEFAULT_USER_EMAIL="me@example.com"
 DEFAULT_USER_NAME="You"
 ```
