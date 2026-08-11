@@ -3,6 +3,8 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { ThemeProvider } from "@/components/layout/theme-provider";
 import "./globals.css";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Focus — Personal Productivity Assistant",
   description: "Your daily and weekly accountability assistant",
